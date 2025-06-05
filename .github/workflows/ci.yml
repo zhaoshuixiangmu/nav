@@ -1,36 +1,59 @@
-name: Build web
+name: Build and Deploy Web # 更清晰的名称
+
 on:
   push:
     branches:
       - master
       - main
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    # 添加必要的权限声明
+    permissions:
+      contents: read     # 允许读取仓库内容
+      pages: write     # 允许写入 GitHub Pages（非常重要！）
+      id-token: write  # 允许获取 OIDC ID Token（actions/deploy-pages 需要）
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          persist-credentials: false
-      - name: Set Node.js
-        uses: actions/setup-node@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4 # 推荐使用最新版本
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4 # 推荐使用最新版本
         with:
           node-version: 22.x
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10
-      - name: Install
-        run: |
-          pnpm install
-      # dist/404.html: gh-pages history mode
-      - name: Build
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build website # 构建你的网站
         run: |
           npm run build-gh-pages
+          # 确保复制操作发生在构建输出目录，且目标路径正确
+          # 这里假设 dist/browser 是最终的输出目录
           cp dist/browser/index.html dist/browser/404.html
-      - name: Deploy
-        uses: JamesIves/github-pages-deploy-action@v4
+
+      # 新增：配置 GitHub Pages
+      - name: Setup Pages
+        uses: actions/configure-pages@v5 # 配置 GitHub Pages 环境
+        # 这一步不需要额外的 with 参数，除非你有自定义的部署路径
+
+      # 新增：上传构建产物为 Pages Artifact
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          token: ${{ secrets.TOKEN }}
-          branch: gh-pages
-          folder: dist/browser
+          # 指定你的网站构建输出目录，确保与你的 build 步骤匹配
+          path: './dist/browser' # 根据你的 build 步骤，这应该是最终的静态文件目录
+
+      # 新增：部署到 GitHub Pages
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4 # 官方部署 Action
+        # 这个 Action 会自动获取之前 upload-pages-artifact 上传的 Artifact 并部署
+        # 不需要 token 参数，因为它依赖于 Job 级别的 permissions 和 GITHUB_TOKEN
